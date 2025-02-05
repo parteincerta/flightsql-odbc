@@ -69,7 +69,9 @@ public:
     }
     if (SHOULD_LOCK) {
       return reinterpret_cast<Derived*>(handle)->executeWithLock(rc, func);
+      //return reinterpret_cast<Derived*>(handle)->execute(rc, func);
     } else {
+      //return reinterpret_cast<Derived*>(handle)->executeWithLock(rc, func);
       return reinterpret_cast<Derived*>(handle)->execute(rc, func);
     }
   }

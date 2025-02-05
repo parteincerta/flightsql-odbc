@@ -43,7 +43,7 @@ namespace {
 
 FlightSqlDriver::FlightSqlDriver()
     : diagnostics_("Apache Arrow", "Flight SQL", OdbcVersion::V_3),
-      version_("0.9.0.0")
+      version_("0.9.2-armv8")
 {}
 
 std::shared_ptr<Connection>

@@ -12,6 +12,7 @@
 #include <sql.h>
 #include <memory>
 #include <string>
+#include <thread>
 
 namespace driver {
 namespace odbcabstraction {
@@ -111,5 +112,10 @@ class ODBCStatement : public ODBCHandle<ODBCStatement> {
     SQLULEN m_rowsetSize; // Used by SQLExtendedFetch instead of the ARD array size.
     bool m_isPrepared;
     bool m_hasReachedEndOfResult;
+
+  std::thread massager_;
+  mutable bool client_hasnot_fetched_data_;
+  void massage();
+  bool FetchInternal(size_t rows);
 };
 }

@@ -29,6 +29,9 @@
 
 #include "system_trust_store.h"
 
+#include <chrono>
+#include <os/log.h>
+
 #ifndef NI_MAXHOST
 #define NI_MAXHOST 1025
 #endif
@@ -171,6 +174,14 @@ void FlightSqlConnection::Connect(const ConnPropertyMap &properties,
     const std::shared_ptr<arrow::flight::ClientMiddlewareFactory>
         &cookie_factory = arrow::flight::GetCookieFactory();
     client_options.middleware.push_back(cookie_factory);
+    // client_options.generic_options.emplace_back("grpc.max_connection_idle_ms", INT_MAX);
+    // client_options.generic_options.emplace_back("grpc.max_connection_age_ms", INT_MAX);
+    // client_options.generic_options.emplace_back("grpc.http2.min_time_between_pings_ms", INT_MAX);
+    // client_options.generic_options.emplace_back("grpc.http2.min_ping_interval_without_data_ms", INT_MAX);
+    // client_options.generic_options.emplace_back("grpc.server_max_unrequested_time_in_server", INT_MAX);
+    // client_options.generic_options.emplace_back("grpc.http2.max_pings_without_data", 0);
+    // client_options.generic_options.emplace_back("grpc.keepalive_time_ms", INT_MAX);
+    // client_options.generic_options.emplace_back("grpc.keepalive_timeout_ms", INT_MAX);
 
     std::unique_ptr<FlightClient> flight_client;
     ThrowIfNotOK(
@@ -191,6 +202,9 @@ void FlightSqlConnection::Connect(const ConnPropertyMap &properties,
 
     PopulateMetadataSettings(properties);
     PopulateCallOptions(properties);
+
+    // stop_massaging_ = false;
+    // massager_ = std::thread{&FlightSqlConnection::massage, this};
   } catch (...) {
     attribute_[CONNECTION_DEAD] = static_cast<uint32_t>(SQL_TRUE);
     sql_client_.reset();
@@ -198,6 +212,18 @@ void FlightSqlConnection::Connect(const ConnPropertyMap &properties,
     throw;
   }
 }
+
+/*
+void FlightSqlConnection::massage() {
+  os_log(OS_LOG_DEFAULT, "flightsql: starting massaging process");
+  while (!stop_massaging_) {
+    sql_client_->GetCatalogs(call_options_);
+    os_log(OS_LOG_DEFAULT, "flightsql: performed GetCatalogs");
+    std::this_thread::sleep_for(std::chrono::minutes(1));
+  }
+  os_log(OS_LOG_DEFAULT, "flightsql: exiting massaging process");
+}
+*/
 
 void FlightSqlConnection::PopulateMetadataSettings(const Connection::ConnPropertyMap &conn_property_map) {
   metadata_settings_.string_column_length_ = GetStringColumnLength(conn_property_map);
@@ -289,6 +315,11 @@ FlightSqlConnection::BuildFlightClientOptions(const ConnPropertyMap &properties,
   // Persist state information using cookies if the FlightProducer supports it.
   options.middleware.push_back(arrow::flight::GetCookieFactory());
 
+  auto prop_iter = properties.find(HOST);
+  if (properties.end() != prop_iter) {
+    options.override_hostname = prop_iter->second;
+  }
+
   if (ssl_config->useEncryption()) {
     if (ssl_config->shouldDisableCertificateVerification()) {
       options.disable_server_verification = ssl_config->shouldDisableCertificateVerification();
@@ -366,6 +397,9 @@ void FlightSqlConnection::Close() {
     throw DriverException("Connection already closed.");
   }
 
+  // stop_massaging_ = true;
+  // if (massager_.joinable())
+  //   massager_.join();
   sql_client_.reset();
   closed_ = true;
   attribute_[CONNECTION_DEAD] = static_cast<uint32_t>(SQL_TRUE);
@@ -423,7 +457,10 @@ Connection::Info FlightSqlConnection::GetInfo(uint16_t info_type) {
 FlightSqlConnection::FlightSqlConnection(OdbcVersion odbc_version, const std::string &driver_version)
     : diagnostics_("Apache Arrow", "Flight SQL", odbc_version),
       odbc_version_(odbc_version), info_(call_options_, sql_client_, driver_version),
-      closed_(true) {
+      closed_(true)
+      //massager_{},
+      //stop_massaging_(true) {
+      {
   attribute_[CONNECTION_DEAD] = static_cast<uint32_t>(SQL_TRUE);
   attribute_[LOGIN_TIMEOUT] = static_cast<uint32_t>(0);
   attribute_[CONNECTION_TIMEOUT] = static_cast<uint32_t>(0);

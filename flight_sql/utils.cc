@@ -42,12 +42,15 @@ bool IsComplexType(arrow::Type::type type_id) {
 
 odbcabstraction::SqlDataType GetDefaultSqlCharType(bool useWideChar) {
   return useWideChar ? odbcabstraction::SqlDataType_WCHAR : odbcabstraction::SqlDataType_CHAR;
+  // return odbcabstraction::SqlDataType_WCHAR;
 }
 odbcabstraction::SqlDataType GetDefaultSqlVarcharType(bool useWideChar) {
   return useWideChar ? odbcabstraction::SqlDataType_WVARCHAR : odbcabstraction::SqlDataType_VARCHAR;
+  // return odbcabstraction::SqlDataType_WVARCHAR;
 }
 odbcabstraction::CDataType GetDefaultCCharType(bool useWideChar) {
   return useWideChar ? odbcabstraction::CDataType_WCHAR : odbcabstraction::CDataType_CHAR;
+  // return odbcabstraction::CDataType_WCHAR;
 }
 
 }

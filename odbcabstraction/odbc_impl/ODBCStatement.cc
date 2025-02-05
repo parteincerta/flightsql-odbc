@@ -21,6 +21,8 @@
 #include <boost/optional.hpp>
 #include <utility>
 #include <boost/variant.hpp>
+// #include <chrono>
+// #include <os/log.h>
 
 using namespace ODBC;
 using namespace driver::odbcabstraction;
@@ -203,7 +205,9 @@ ODBCStatement::ODBCStatement(ODBCConnection& connection,
   m_maxRows(0),
   m_rowsetSize(1),
   m_isPrepared(false),
-  m_hasReachedEndOfResult(false) {
+  m_hasReachedEndOfResult(false),
+  massager_{},
+  client_hasnot_fetched_data_(false) {
 }
 
 ODBCConnection &ODBCStatement::GetConnection() {
@@ -263,11 +267,25 @@ void ODBCStatement::ExecutePrepared() {
   }
 }
 
+// void ODBCStatement::massage() {
+//   while (client_hasnot_fetched_data_ && !m_hasReachedEndOfResult) {
+//     os_log(OS_LOG_DEFAULT, "flightsql: Fetching one row");
+//     if (this->FetchInternal(0)) {
+//       os_log(OS_LOG_DEFAULT, "flightsql: Fetching one row ok");
+//     }
+//     else os_log(OS_LOG_DEFAULT, "flightsql: Fetching one row NOT ok");
+//     std::this_thread::sleep_for(std::chrono::seconds(5));
+//   }
+//   os_log(OS_LOG_DEFAULT, "flightsql: Fetching exit");
+// }
+
 void ODBCStatement::ExecuteDirect(const std::string& query) {
   if (m_spiStatement->Execute(query)) {
     m_currenResult = m_spiStatement->GetResultSet();
     m_ird->PopulateFromResultSetMetadata(m_currenResult->GetMetadata().get());
     m_hasReachedEndOfResult = false;
+    // client_hasnot_fetched_data_ = true;
+    // massager_ = std::thread{&ODBCStatement::massage, this};
   }
 
   // Direct execution wipes out the prepared state.
@@ -275,6 +293,14 @@ void ODBCStatement::ExecuteDirect(const std::string& query) {
 }
 
 bool ODBCStatement::Fetch(size_t rows) {
+  // client_hasnot_fetched_data_ = false;
+  // if (massager_.joinable()) {
+  //   massager_.join();
+  // }
+  return FetchInternal(rows);
+}
+
+bool ODBCStatement::FetchInternal(size_t rows) {
   if (m_hasReachedEndOfResult) {
     m_ird->SetRowsProcessed(0);
     return false;
@@ -312,7 +338,6 @@ bool ODBCStatement::Fetch(size_t rows) {
   m_hasReachedEndOfResult = rowsFetched != rows;
   return rowsFetched != 0;
 }
-
 void ODBCStatement::GetStmtAttr(SQLINTEGER statementAttribute,
                                 SQLPOINTER output, SQLINTEGER bufferSize,
                                 SQLINTEGER *strLenPtr, bool isUnicode) {
@@ -534,6 +559,7 @@ void ODBCStatement::SetStmtAttr(SQLINTEGER statementAttribute, SQLPOINTER value,
       return;
 
     case SQL_ATTR_ASYNC_ENABLE:
+    return;
 #ifdef SQL_ATTR_ASYNC_STMT_EVENT
     case SQL_ATTR_ASYNC_STMT_EVENT:
       throw DriverException("Unsupported attribute", "HYC00");

@@ -11,6 +11,7 @@
 #include <arrow/flight/api.h>
 #include <arrow/flight/sql/api.h>
 #include <vector>
+// #include <thread>
 
 #include "get_info_cache.h"
 #include "odbcabstraction/types.h"
@@ -41,7 +42,11 @@ private:
   odbcabstraction::OdbcVersion odbc_version_;
   bool closed_;
 
+  // std::thread massager_;
+  // bool stop_massaging_;
+
   void PopulateMetadataSettings(const Connection::ConnPropertyMap &connPropertyMap);
+  // void massage();
 
 public:
   static const std::vector<std::string> ALL_KEYS;
@@ -63,7 +68,7 @@ public:
   static const std::string USE_WIDE_CHAR;
   static const std::string CHUNK_BUFFER_CAPACITY;
 
-  explicit FlightSqlConnection(odbcabstraction::OdbcVersion odbc_version, const std::string &driver_version = "0.9.0.0");
+  explicit FlightSqlConnection(odbcabstraction::OdbcVersion odbc_version, const std::string &driver_version = "0.9.2.0-armv8");
 
   void Connect(const ConnPropertyMap &properties,
                std::vector<std::string> &missing_attr) override;
