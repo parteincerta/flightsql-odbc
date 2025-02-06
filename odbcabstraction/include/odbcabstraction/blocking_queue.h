@@ -42,23 +42,23 @@ public:
 
   BlockingQueue(size_t capacity):
     capacity_(capacity),
-    extended_capacity_(capacity * 3),
+    extended_capacity_(capacity * 10),
     buffer_(extended_capacity_) {}
 
   void AddProducer(Supplier supplier) {
     active_threads_++;
     threads_.emplace_back([=] {
       while (!closed_) {
-        // Block while queue is full
-        std::unique_lock<std::mutex> unique_lock(mtx_);
-        if (!WaitUntilCanPushOrClosed(unique_lock)) break;
-        unique_lock.unlock();
 
         // Only one thread at a time be notified and call supplier
         auto item = supplier();
         if (!item) break;
 
+        // Block while queue is full
+        std::unique_lock<std::mutex> unique_lock(mtx_);
+        if (!WaitUntilCanPushOrClosed(unique_lock)) break;
         Push(*item);
+        not_empty_.notify_one();
       }
 
       std::unique_lock<std::mutex> unique_lock(mtx_);
@@ -68,15 +68,15 @@ public:
   }
 
   void Push(T item) {
-    std::unique_lock<std::mutex> unique_lock(mtx_);
-    if (!WaitUntilCanPushOrClosed(unique_lock)) return;
+    // std::unique_lock<std::mutex> unique_lock(mtx_);
+    // if (!WaitUntilCanPushOrClosed(unique_lock)) return;
 
     buffer_[right_] = std::move(item);
 
     right_ = (right_ + 1) % extended_capacity_;
     buffer_size_++;
 
-    not_empty_.notify_one();
+    // not_empty_.notify_one();
   }
 
   bool Pop(T *result) {
