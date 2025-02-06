@@ -11,7 +11,9 @@
 #include <condition_variable>
 #include <thread>
 #include <vector>
+#include <chrono>
 #include <boost/optional.hpp>
+#include <os/log.h>
 
 namespace driver {
 namespace odbcabstraction {
@@ -21,6 +23,7 @@ template<typename T>
 class BlockingQueue {
 
   size_t capacity_;
+  size_t extended_capacity_;
   std::vector<T> buffer_;
   size_t buffer_size_{0};
   size_t left_{0}; // index where variables are put inside of buffer (produced)
@@ -37,7 +40,10 @@ class BlockingQueue {
 public:
   typedef std::function<boost::optional<T>(void)> Supplier;
 
-  BlockingQueue(size_t capacity): capacity_(capacity), buffer_(capacity) {}
+  BlockingQueue(size_t capacity):
+    capacity_(capacity),
+    extended_capacity_(capacity * 3),
+    buffer_(extended_capacity_) {}
 
   void AddProducer(Supplier supplier) {
     active_threads_++;
@@ -67,7 +73,7 @@ public:
 
     buffer_[right_] = std::move(item);
 
-    right_ = (right_ + 1) % capacity_;
+    right_ = (right_ + 1) % extended_capacity_;
     buffer_size_++;
 
     not_empty_.notify_one();
@@ -79,7 +85,7 @@ public:
 
     *result = std::move(buffer_[left_]);
 
-    left_ = (left_ + 1) % capacity_;
+    left_ = (left_ + 1) % extended_capacity_;
     buffer_size_--;
 
     not_full_.notify_one();
@@ -104,9 +110,17 @@ public:
 
 private:
   bool WaitUntilCanPushOrClosed(std::unique_lock<std::mutex> &unique_lock) {
-    not_full_.wait(unique_lock, [this]() {
-      return closed_ || buffer_size_ != capacity_;
-    });
+    if (buffer_size_ < capacity_) {
+      os_log(OS_LOG_DEFAULT, "flightsql: buffer_size < capacity_ (%zu) / (%zu)", buffer_size_, extended_capacity_);
+      not_full_.wait(unique_lock, [this]() {
+        return closed_ || buffer_size_ != capacity_;
+      });
+    }
+    else {
+      os_log(OS_LOG_DEFAULT, "flightsql: waiting on timeout for Push (%zu) / (%zu)", buffer_size_, extended_capacity_);
+      not_full_.wait_for(unique_lock, std::chrono::seconds(40));
+      os_log(OS_LOG_DEFAULT, "flightsql: timeout for Push elapsed (%zu) / (%zu)", buffer_size_, extended_capacity_);
+    }
     return !closed_;
   }
 
