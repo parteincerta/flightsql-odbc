@@ -48,19 +48,19 @@ public:
         while (!closed_) {
           std::unique_lock<std::mutex> unique_lock(mtx_);
           not_closed_.wait_until(unique_lock, last_push_time_ + timeout_, [this](){ return closed_.load(); });
-          os_log(OS_LOG_DEFAULT, "flightsql: BQ::notifier_thread_waked");
+          os_log(OS_LOG_DEFAULT, "flightsql: BQ::notifier_thread_waked, thread id: %lu", CurrentThreadHash());
           if (last_push_time_ + timeout_ < std::chrono::system_clock::now()) {
             long_time_no_pushes_ = true;
             not_full_.notify_one();
             last_push_time_ = std::chrono::system_clock::now();
-            os_log(OS_LOG_DEFAULT, "flightsql: BQ::notifier_thread_notified");
+            os_log(OS_LOG_DEFAULT, "flightsql: BQ::notifier_thread_notified, thread id: %lu", CurrentThreadHash());
           }
         }
       });
     }
 
   void AddProducer(Supplier supplier) {
-    os_log(OS_LOG_DEFAULT, "flightsql: BQ::AddProducer");
+    os_log(OS_LOG_DEFAULT, "flightsql: BQ::AddProducer, thread id: %lu", CurrentThreadHash());
     active_threads_++;
     threads_.emplace_back([=] {
       while (!closed_) {
@@ -69,7 +69,7 @@ public:
 
         Push(*item);
       }
-      os_log(OS_LOG_DEFAULT, "flightsql: BQ::AddProducer exited while");
+      os_log(OS_LOG_DEFAULT, "flightsql: BQ::AddProducer exited while, thread id: %lu", CurrentThreadHash());
       std::unique_lock<std::mutex> unique_lock(mtx_);
       active_threads_--;
       not_empty_.notify_all();
@@ -77,10 +77,10 @@ public:
   }
 
   void Push(T item) {
-    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Push");
+    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Push enter, thread id: %lu", CurrentThreadHash());
     std::unique_lock<std::mutex> unique_lock(mtx_);
     if (!WaitUntilCanPushOrClosed(unique_lock)) {
-      os_log(OS_LOG_DEFAULT, "flightsql: BQ::Push early exit");
+      os_log(OS_LOG_DEFAULT, "flightsql: BQ::Push early exit, thread id: %lu", CurrentThreadHash());
       return;
     }
 
@@ -88,14 +88,14 @@ public:
     last_push_time_ = std::chrono::system_clock::now();
     long_time_no_pushes_ = false;
     not_empty_.notify_one();
-    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Push exit");
+    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Push exit, thread id: %lu", CurrentThreadHash());
   }
 
   bool Pop(T *result) {
-    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Pop");
+    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Pop, thread id: %lu", CurrentThreadHash());
     std::unique_lock<std::mutex> unique_lock(mtx_);
     if (!WaitUntilCanPopOrClosed(unique_lock)) {
-      os_log(OS_LOG_DEFAULT, "flightsql: BQ::Pop early exit false");
+      os_log(OS_LOG_DEFAULT, "flightsql: BQ::Pop early exit false, thread id: %lu", CurrentThreadHash());
       return false;
     }
 
@@ -103,7 +103,7 @@ public:
     buffer_.pop_front();
     not_full_.notify_one();
 
-    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Pop exit true");
+    os_log(OS_LOG_DEFAULT, "flightsql: BQ::Pop exit true, thread id: %lu", CurrentThreadHash());
     return true;
   }
 
@@ -138,6 +138,10 @@ private:
     });
 
     return !closed_ && buffer_.size() != 0;
+  }
+
+  std::size_t CurrentThreadHash() {
+    return std::hash<std::thread::id>()(std::this_thread::get_id());
   }
 };
 
