@@ -42,23 +42,24 @@ public:
 
   BlockingQueue(size_t capacity):
     capacity_(capacity),
-    extended_capacity_(capacity * 10),
+    extended_capacity_(capacity_ * 100 * 10),
     buffer_(extended_capacity_) {}
 
   void AddProducer(Supplier supplier) {
     active_threads_++;
     threads_.emplace_back([=] {
       while (!closed_) {
+        // Block while queue is full
+        std::unique_lock<std::mutex> unique_lock(mtx_);
+        if (!WaitUntilCanPushOrClosed(unique_lock)) break;
 
         // Only one thread at a time be notified and call supplier
         auto item = supplier();
         if (!item) break;
 
-        // Block while queue is full
-        std::unique_lock<std::mutex> unique_lock(mtx_);
-        if (!WaitUntilCanPushOrClosed(unique_lock)) break;
         Push(*item);
         not_empty_.notify_one();
+        os_log(OS_LOG_DEFAULT, "flightsql: [Push] size:(%zu); capacity(%zu) tid:(%zu)", buffer_size_, extended_capacity_, std::hash<std::thread::id>{}(std::this_thread::get_id()));
       }
 
       std::unique_lock<std::mutex> unique_lock(mtx_);
@@ -89,6 +90,7 @@ public:
     buffer_size_--;
 
     not_full_.notify_one();
+    os_log(OS_LOG_DEFAULT, "flightsql: [Pop] size:(%zu); capacity(%zu) tid:(%zu)", buffer_size_, extended_capacity_, std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
     return true;
   }
@@ -111,15 +113,15 @@ public:
 private:
   bool WaitUntilCanPushOrClosed(std::unique_lock<std::mutex> &unique_lock) {
     if (buffer_size_ < capacity_) {
-      os_log(OS_LOG_DEFAULT, "flightsql: buffer_size < capacity_ (%zu) / (%zu)", buffer_size_, extended_capacity_);
+      //os_log(OS_LOG_DEFAULT, "flightsql: buffer_size < capacity_ (%zu) / (%zu) - (%zu)", buffer_size_, extended_capacity_, std::hash<std::thread::id>{}(std::this_thread::get_id()));
       not_full_.wait(unique_lock, [this]() {
         return closed_ || buffer_size_ != capacity_;
       });
     }
     else {
-      os_log(OS_LOG_DEFAULT, "flightsql: waiting on timeout for Push (%zu) / (%zu)", buffer_size_, extended_capacity_);
-      not_full_.wait_for(unique_lock, std::chrono::seconds(40));
-      os_log(OS_LOG_DEFAULT, "flightsql: timeout for Push elapsed (%zu) / (%zu)", buffer_size_, extended_capacity_);
+      // os_log(OS_LOG_DEFAULT, "flightsql: waiting on timeout for Push (%zu) / (%zu) - (%zu)", buffer_size_, extended_capacity_, std::hash<std::thread::id>{}(std::this_thread::get_id()));
+      not_full_.wait_for(unique_lock, std::chrono::milliseconds(500));
+      // os_log(OS_LOG_DEFAULT, "flightsql: timeout for Push elapsed (%zu) / (%zu) - (%zu)", buffer_size_, extended_capacity_, std::hash<std::thread::id>{}(std::this_thread::get_id()));
     }
     return !closed_;
   }
