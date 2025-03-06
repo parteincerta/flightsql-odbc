@@ -68,7 +68,7 @@ public:
   static const std::string USE_WIDE_CHAR;
   static const std::string CHUNK_BUFFER_CAPACITY;
 
-  explicit FlightSqlConnection(odbcabstraction::OdbcVersion odbc_version, const std::string &driver_version = "0.9.2.0-armv8");
+  explicit FlightSqlConnection(odbcabstraction::OdbcVersion odbc_version, const std::string &driver_version = "0.9.2.1-armv8");
 
   void Connect(const ConnPropertyMap &properties,
                std::vector<std::string> &missing_attr) override;
