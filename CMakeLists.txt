@@ -14,12 +14,8 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 # Add ODBC dependencies.
 if (APPLE)
-<<<<<<< HEAD
     set(ODBC_INCLUDE_DIRS /Users/dremio-clients/Developer/artifacts-odbc-arrowflight/iODBC/include)
     # set(ODBC_INCLUDE_DIRS /opt/homebrew/Cellar/libiodbc/3.52.16/include)
-=======
-    set(ODBC_INCLUDE_DIRS /usr/local/Cellar/libiodbc/3.52.16/include)
->>>>>>> master
     add_compile_definitions(HAVE_LONG_LONG SQLCOLATTRIBUTE_SQLLEN WITH_IODBC)
 else()
     find_package(ODBC REQUIRED)
