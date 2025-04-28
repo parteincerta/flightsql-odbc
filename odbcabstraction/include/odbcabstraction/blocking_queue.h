@@ -13,7 +13,7 @@
 #include <vector>
 #include <chrono>
 #include <boost/optional.hpp>
-// #include <os/log.h>
+#include <os/log.h>
 
 namespace driver {
 namespace odbcabstraction {
@@ -40,10 +40,16 @@ class BlockingQueue {
 public:
   typedef std::function<boost::optional<T>(void)> Supplier;
 
-  BlockingQueue(size_t capacity):
+  BlockingQueue(size_t capacity, bool use_extended_buffer):
     capacity_(capacity),
-    extended_capacity_(capacity_ * 2000),
-    buffer_(extended_capacity_) {}
+    extended_capacity_(0) {
+      if (use_extended_buffer) {
+        extended_capacity_ = 1000 * capacity_;
+        buffer_.resize(extended_capacity_, T());
+        os_log(OS_LOG_DEFAULT, "flightsql: Extended FlightSQL buffer enabled (#slots=%zu)", extended_capacity_);
+      }
+      else buffer_.resize(capacity_);
+    }
 
   void AddProducer(Supplier supplier) {
     active_threads_++;
@@ -74,7 +80,7 @@ public:
 
     buffer_[right_] = std::move(item);
 
-    right_ = (right_ + 1) % extended_capacity_;
+    right_ = (right_ + 1) % (extended_capacity_ ? extended_capacity_ : capacity_);
     buffer_size_++;
 
     // not_empty_.notify_one();
@@ -86,7 +92,7 @@ public:
 
     *result = std::move(buffer_[left_]);
 
-    left_ = (left_ + 1) % extended_capacity_;
+    left_ = (left_ + 1) % (extended_capacity_ ? extended_capacity_ : capacity_);
     buffer_size_--;
 
     not_full_.notify_one();
@@ -112,12 +118,12 @@ public:
 
 private:
   bool WaitUntilCanPushOrClosed(std::unique_lock<std::mutex> &unique_lock) {
-    if (buffer_size_ >= extended_capacity_ ) {
+    if (extended_capacity_ > 0 && buffer_size_ >= extended_capacity_ ) {
       not_full_.wait(unique_lock, [this]() {
         return closed_ || buffer_size_ < extended_capacity_;
       });
     }
-    else if (buffer_size_ >= capacity_) {
+    else if (extended_capacity_ > 0 && buffer_size_ >= capacity_) {
       not_full_.wait_for(unique_lock, std::chrono::milliseconds(500));
     }
     else {
